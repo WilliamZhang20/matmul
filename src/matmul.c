@@ -11,6 +11,8 @@ inline int min(int x, int y) {
     #define NTHREADS 16
 #endif
 
+// Constants to divide the matrix into blocks
+// This helps to divide & conquer, which is proven to be faster
 #define MC (16 * NTHREADS * 5)
 #define NC (6 * NTHREADS * 50)
 #define KC 500
