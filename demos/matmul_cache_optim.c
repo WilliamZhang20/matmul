@@ -1,4 +1,3 @@
-// clang-17 -O2 -mno-avx512f -DTEST -march=native -DNITER=100000 matmul_cache.c -o matmul_cache.out && ./matmul_cache.out
 #include <immintrin.h>
 #include <math.h>
 #include <stdint.h>
@@ -160,15 +159,15 @@ void matmul_cache(float* A, float* B, float* C, const int M, const int N, const 
         const int nc = min(NC, N - j);
         for (int p = 0; p < K; p += KC) {
             const int kc = min(KC, K - p);
-            pack_blockB(&B[j * K + p], blockB_packed, nc, kc, K);
+            pack_blockB(&B[j * K + p], blockB_packed, nc, kc, K); // rows of B - the second matrix in multiplication packed over 3rd loop
             for (int i = 0; i < M; i += MC) {
                 const int mc = min(MC, M - i);
-                pack_blockA(&A[p * M + i], blockA_packed, mc, kc, M);
+                pack_blockA(&A[p * M + i], blockA_packed, mc, kc, M); // corresponding columns of A - the 1st matrix in multiplication packed over 4th loop
                 for (int jr = 0; jr < nc; jr += NR) {
                     const int nr = min(NR, nc - jr);
                     for (int ir = 0; ir < mc; ir += MR) {
                         const int mr = min(MR, mc - ir);
-                        kernel_16x6(&blockA_packed[ir * kc],
+                        kernel_16x6(&blockA_packed[ir * kc], // optimizes spatial locality of lower level caches
                                     &blockB_packed[jr * kc],
                                     &C[(j + jr) * M + (i + ir)],
                                     mr,
@@ -235,7 +234,7 @@ void compare_mats(float* mat1, float* mat2, const int M, const int N) {
 
 uint64_t timer() {
     struct timespec start;
-    clock_gettime(CLOCK_MONOTONIC_RAW, &start);
+    clock_gettime(CLOCK_MONOTONIC, &start);
     return (uint64_t)start.tv_sec * 1000000000 + (uint64_t)start.tv_nsec;
 }
 
@@ -264,6 +263,7 @@ int main() {
         double exec_time = (end - start) * 1e-9;
         double FLOPS = FLOP / exec_time;
 
+        // One can clearly NOTICE that the GFLOPS per iteration is lower with cache size optimization
         printf("Exec. time = %.3fms\n", exec_time * 1000);
         printf("GFLOPS = %.3f\n", FLOPS / 1e9);
 #ifdef TEST

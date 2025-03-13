@@ -1,4 +1,3 @@
-// clang-17 -O2 -mno-avx512f -march=native -DTEST -DNITER=1000 matmul_kernel.c -o matmul_kernel.out && ./matmul_kernel.out
 #include <assert.h>
 #include <immintrin.h>
 #include <math.h>
