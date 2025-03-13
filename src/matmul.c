@@ -17,8 +17,35 @@ inline int min(int x, int y) {
 #define NC (6 * NTHREADS * 50)
 #define KC 500
 
-static float blockA_packed[MC * KC] __attribute__((aligned(64)));
-static float blockB_packed[NC * KC] __attribute__((aligned(64)));
+static float blockA_packed[MC * KC] __attribute__((aligned(64))); // buffer for matrix A with memory alignment set for SIMD compatiblity
+static float blockB_packed[NC * KC] __attribute__((aligned(64))); // buffer for matrix B with memory alignment set for SIMD compatiblity
+
+void pack_panelB(float* B, float* blockB_packed, int nr, int kc, int k) {
+    for (int p = 0; p < kc; p++) {
+        for (int j = 0; j < nr; j++) {
+            *blockB_packed++ = B[j * k + p];
+        }
+        for (int j = nr; j < 6; j++) {
+            *blockB_packed++ = 0;
+        }
+    }
+}
+
+void pack_blockB(float* B, float* blockB_packed, int nc, int kc, int k) {
+#pragma omp parallel for num_threads(NTHREADS)
+    for (int j = 0; j < nc; j += 6) {
+        int nr = min(6, nc - j);
+        pack_panelB(&B[j * k], &blockB_packed[j * kc], nr, kc, k);
+    }
+}
+
+void pack_blockA(float* A, float* blockA_packed, int mc, int kc, int M) {
+#pragma omp parallel for num_threads(NTHREADS)
+    for (int i = 0; i < mc; i += 16) {
+        int mr = min(16, mc - i);
+        pack_panelA(&A[i], &blockA_packed[i * kc], mr, kc, M);
+    }
+}
 
 void matmul(float* A, float* B, float* C, int m, int n, int k) {
     memset(C, 0, m * n * sizeof(float));
@@ -26,11 +53,11 @@ void matmul(float* A, float* B, float* C, int m, int n, int k) {
         int nc = min(NC, n - j);
         for (int p = 0; p < k; p += KC) {
             int kc = min(KC, k - p);
-            pack_blockB(&B[j * k + p], blockB_packed, nc, kc, k);
+            pack_blockB(&B[j * k + p], blockB_packed, nc, kc, k); // cache optimization B
             for (int i = 0; i < m; i += MC) {
                 int mc = min(MC, m - i);
-                pack_blockA(&A[p * m + i], blockA_packed, mc, kc, m);
-#pragma omp parallel for collapse(2) num_threads(NTHREADS)
+                pack_blockA(&A[p * m + i], blockA_packed, mc, kc, m); // cache optimization A
+#pragma omp parallel for collapse(2) num_threads(NTHREADS) // parallelize using OpenMP
                 for (int ir = 0; ir < mc; ir += 16) {
                     for (int jr = 0; jr < nc; jr += 6) {
                         int nr = min(6, nc - jr);
