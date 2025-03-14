@@ -33,8 +33,19 @@ int main(int argc, char* argv[]) {
         float* C_ref = (float*)_mm_malloc(m * n * sizeof(float), 64);
         init_rand(A, m * k);
         init_rand(B, k * n);
+
+        uint64_t start = timer();
         matmul(A, B, C, m, n, k); // fast matrix multiplication
+        uint64_t end = timer();
+        double exec_time = (end - start) * 1e-9;
+        printf("Fancy exec. time = %.3fms\n", exec_time * 1000);
+        
+        start = timer();
         matmul_naive(A, B, C_ref, m, n, k); // reliable reference from looped old matrix multiplication (but naively parallelized with OpenMP)
+        end = timer();
+        exec_time = (end - start) * 1e-9;
+        printf("Boring exec. time = %.3fms\n", exec_time * 1000);
+        
         struct val_data result = validate_mat(C, C_ref, m * n, 1e-4);
         if (result.n_error > 0) {
             n_failed += 1;

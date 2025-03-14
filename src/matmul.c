@@ -65,9 +65,11 @@ void matmul(float* A, float* B, float* C, int m, int n, int k) {
         for (int p = 0; p < k; p += KC) {
             int kc = min(KC, k - p);
             pack_blockB(&B[j * k + p], blockB_packed, nc, kc, k); // cache optimization B
+            __builtin_prefetch(&B[j * k + p], 1, 3); 
             for (int i = 0; i < m; i += MC) {
                 int mc = min(MC, m - i);
                 pack_blockA(&A[p * m + i], blockA_packed, mc, kc, m); // cache optimization A
+                __builtin_prefetch(&A[p * m + i], 1, 3); 
 #pragma omp parallel for collapse(2) num_threads(NTHREADS) // parallelize using OpenMP
                 for (int ir = 0; ir < mc; ir += 16) {
                     for (int jr = 0; jr < nc; jr += 6) {
