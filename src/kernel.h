@@ -1,5 +1,6 @@
 #pragma once
 #include <immintrin.h>
+#include <stdint.h>
 
 static int8_t mask[32]
     __attribute__((aligned(64))) = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
