@@ -1,4 +1,5 @@
 #include <string.h>
+#include <immintrin.h>
 
 inline int min(int x, int y) {
     if(x < y) {
@@ -78,10 +79,10 @@ void matmul(float* A, float* B, float* C, int m, int n, int k) {
                         
                         // Prefetch the A and B blocks ahead of time for the current stride
                         if (ir + 16 < mc) {
-                            __builtin_prefetch(&blockA_packed[(ir + 16) * kc], 0, 3); // Prefetch next row of A
+                            _mm_prefetch(&blockA_packed[(ir + 16) * kc], _MM_HINT_T0);
                         }
                         if (jr + 6 < nc) {
-                            __builtin_prefetch(&blockB_packed[(jr + 6) * kc], 0, 3); // Prefetch next column of B
+                            _mm_prefetch(&blockB_packed[(jr + 6) * kc], _MM_HINT_T0);
                         }
 
                         int nr = min(6, nc - jr);
