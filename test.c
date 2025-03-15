@@ -22,6 +22,8 @@ int main(int argc, char* argv[]) {
 
     int n_tests = (matsize_max - matsize_min) / matsize_step;
     int n_failed = 0;
+    
+    double total_time = 0;
 
     for (int i = 0; i < n_tests; i += 1) {
         int matsize = matsize_min + i * matsize_step;
@@ -38,13 +40,9 @@ int main(int argc, char* argv[]) {
         matmul(A, B, C, m, n, k); // fast matrix multiplication
         uint64_t end = timer();
         double exec_time = (end - start) * 1e-9;
-        printf("Fancy exec. time = %.3fms\n", exec_time * 1000);
-        
-        start = timer();
+        printf("Exec. time = %.3fms\n", exec_time * 1000);
+        total_time += exec_time;
         matmul_naive(A, B, C_ref, m, n, k); // reliable reference from looped old matrix multiplication (but naively parallelized with OpenMP)
-        end = timer();
-        exec_time = (end - start) * 1e-9;
-        printf("Boring exec. time = %.3fms\n", exec_time * 1000);
         
         struct val_data result = validate_mat(C, C_ref, m * n, 1e-4);
         if (result.n_error > 0) {
@@ -60,4 +58,5 @@ int main(int argc, char* argv[]) {
     }
     printf("=====================\n");
     printf("PASSED: %i / %i\n", n_tests - n_failed, n_tests);
+    printf("Avg Exec. time =  %.3fms\n", total_time / n_tests * 1000);
 }
