@@ -22,21 +22,22 @@ For more info, a map of contents below:
 - [Memory Prefetching](#memory-prefetching)
 - [Sources](#sources)
 
-Key compiler flags used: `-O3 -march=native -mno-avx512f -fopenmp`
+Key compiler flags used: 
+`-O3 -march=native -mno-avx512f -fopenmp`
 
 In which:
- - O3 applies maximum aggressive compiler optimization, which includes reordering instructions, vectorization, and loop unrolling.
- - march=native applies machine-specific optimization - which may give it a boost compared to instructions for generic machine cache/register file sizes.
- - `mno-avx512f` disables ultra wide 512-bit AVX vector instructions - to ensure that we remain in the domain of only AVX2, since AVX512 is power hungry.
-- fopenmp enables the use of OpenMP (Open Multiprocessing) library handling at compile time.
+ - `-O3` applies maximum aggressive compiler optimization, which includes reordering instructions, vectorization, and loop unrolling.
+ - `march=native` applies machine-specific optimization - which may give it a boost compared to instructions for generic machine cache/register file sizes.
+ - `mno-avx512f` disables ultra wide 512-bit AVX vector instructions - to ensure that we remain in the domain of only 256-bit wide AVX2, since AVX512 is generally very exothermic.
+- `-fopenmp` enables the use of OpenMP (Open Multiprocessing) library handling at compile time.
 
-## Mathematical Definitions
+## Mathematical Definitions:
 
 The program multiplies two matrices: an M x K matrix A, and a K x N matrix B. The result matrix C is M x N. 
 
-The general standard formula for one element of C is $$C_{ij} = \sum_{k=1}^{n} A_{ik} B_{kj}$$
+The general standard formula for <u>one element of C</u> is $$ C_{ij} = \sum_{k=1}^{n} A_{ik} B_{kj} $$
 
-Here we will treat matrix multiplication for the entire matrix C as a sum of outer products, which will be:
+Here we will treat matrix multiplication for the <u>entire matrix C</u> as a sum of outer products, which will be:
 
 $$ C = \sum_{k=1}^{n} a_k \otimes b_k^T $$ 
 
@@ -60,21 +61,55 @@ For us to accelerate operations on SIMD hardware we use Advanced Vector Extensio
 
 A 256-bit wide register also translates into holding 8 floats, or simply 8 matrix elements. 
 
-We will perform outer products between columns of an A submatrix $$\overline{A}$$ and rows of a B submatrix $$\overline{B}$$, each of which will add to every element in the output kernel matrix. 
+We will perform outer products between columns of an A submatrix $$\overline{A}$$ and rows of a B submatrix $$\overline{B}$$, each of which will add to every element in the output kernel matrix.
 
 This will consist of element-wise products between columns of A and and broadcasted vectors of single elements from the corresponding rows of submatrix B. Then, the results of all those products are added into the same matrix.
 
-This is done by loading the column of A into a YMM register, broadcasting an element of a row of B into a YMM register (where every element in the register is that same number), and performing a fused-multiply add (FMA) into C. Note that the kernel matrix C is also pre-loaded into 12 YMM registers.
+Getting the operands into YMM registers is done by loading the column of $$\overline{A}$$ into a register using `_mm256_loadu_ps`, and broadcasting an element of a row of $$\overline{B}$$ into a register (where every element in the register is that same number) using `_mm256_broadcast_ss`. The kernel matrix $$\overline{C}$$ is also pre-loaded into 12 YMM registers - and it will accumulate outer product results.
 
-These two vector registers will be element-wise multiplied and added to <u>a column</u> of the matrix C in a single instruction.
+Once loaded, the two vector registers will be element-wise multiplied, with the result added to <u>a column</u> of the matrix $$\overline{C}$$ in a single instruction of the `_mm256_fmadd_ps` function.
 
-The above is done for every element in the row vector B, to yield the completed outer product between a column of A and a row of B. 
+The above is repeated for all $$n_R$$ elements in the row vector of $$\overline{B}$$, to yield the completed outer product between a column of $$\overline{A}$$ and a row of $$\overline{B}$$ - which is a matrix.
 
 Then *all that* is repeated $$K$$ times over all remaining of the $$K$$ columns of the submatrix of A.
 
-This procedure can be summarized in load C matrix, load A column, broadcast load B row, fused-multiply add, repeat for the rest of B, repeat for the rest of A.
+This procedure can be summarized in: load $$\overline{C}$$ matrix, load a column of $$\overline{A}$$, broadcast load a $$\overline{B}$$ row element, fused-multiply add, repeat for the rest of the row of $$\overline{B}$$, repeat for the rest of $$\overline{A}$$.
+
+The interpretation of matrix products using outer products enables the use of SIMD extensions, since it will allow us to go: vectors $$\rightarrow$$ operations $$\rightarrow$$ another vector, rather than reducing it to just a scalar - and repeating unnecessarily.
+
+Since there are only 8 floats in a single YMM register - which is the SIMD width, we have kept the kernel matrix C to be a 16x16 matrix, so $$m_R = 16$$ (a constant multiple of 8) and $$n_R = 6$$ (by choice).
+
+To then cover the entirety of the matrix C, we iterate over its rows and columns by strides (aka hops) of the size of the kernel, which are of course $$m_R$$ and $$n_R$$.
+
+**But what if the matrix dimensions are not a multiple of the kernel dimensions?**
+
+Clearly, then the kernel matrix cover would overshoot the operand matrix. So some register loads will need to be zeroed out. We do this with bitmasks. They are dependent on the number of rows in the matrix `m`, and if the kernel overshoots, the elements in overlapping addresses (with undefined values) will be ignored.
+
+This is done by defining a base mask, which is equal to `0xFFFF` in hex - or in other words, 16 ones. This is shifted out to a mask vector where the i’th element allows the matrix kernel’s ith element to be turned on/off.
+
+For overshoots, i.e. the bit mask has not been shifted to a multiple of 16, then some elements in the 16-row buffer for $$\overline{C}$$’s registers will be zeroed out, as the locations of the `1` are out of our 16-element view.
+
+In other words, values of $$\overline{C}$$ are masked so that the lower `m` indices of the register contain the elements from the kernel, while the upper overshoot space is zeroed out.
+
+Order of packing overall will go like:
+
+```
+for (int i = 0; i < M; i += MR) {
+     const int m = min(MR, M - i);
+     pack_blockA(&A[i], blockA_packed, m, M, K);
+     for (int j = 0; j < N; j += NR) {
+        const int n = min(NR, N - j);
+        pack_blockB(&B[j * K], blockB_packed, n, N, K);
+        kernel_16x6(blockA_packed, blockB_packed, &C[j * M + i], m, n, M, N, K);
+    }
+}
+```
 
 ## Cache Blocking
+
+The code was shown above to demonstrate that it is <u>not</u> a good use of cache space. In the second loop, new batches of B are being loaded multiple times, some of which overlap bewteen access strides, and with some parts not used in the packing functions.
+
+For large matrices, at some point the previously loaded A block will be kicked out in the inner loop, which introduces a cache miss later on, and latency to fetch it back from RAM. 
 
 ## Multithreading
 
@@ -84,4 +119,4 @@ This procedure can be summarized in load C matrix, load A column, broadcast load
 
 [OpenMP Guide](https://www.openmp.org/wp-content/uploads/omp-hands-on-SC08.pdf)
 
-[Intel SIMD Intrinsincs](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
+[Intel SIMD Intrinsincs Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
