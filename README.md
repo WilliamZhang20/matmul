@@ -35,9 +35,9 @@ In which:
 
 The program multiplies two matrices: an M x K matrix A, and a K x N matrix B. The result matrix C is M x N. 
 
-The general standard formula for <u>one element of C</u> is $$ C_{ij} = \sum_{k=1}^{n} A_{ik} B_{kj} $$
+The general standard formula for *one element of C* is $$C_{ij} = \sum_{k=1}^{n} A_{ik} B_{kj}$$
 
-Here we will treat matrix multiplication for the <u>entire matrix C</u> as a sum of outer products, which will be:
+Here we will treat matrix multiplication for the *entire matrix C* as a sum of outer products, which will be:
 
 $$ C = \sum_{k=1}^{n} a_k \otimes b_k^T $$ 
 
@@ -63,11 +63,13 @@ A 256-bit wide register also translates into holding 8 floats, or simply 8 matri
 
 We will perform outer products between columns of an A submatrix $$\overline{A}$$ and rows of a B submatrix $$\overline{B}$$, each of which will add to every element in the output kernel matrix.
 
-This will consist of element-wise products between columns of A and and broadcasted vectors of single elements from the corresponding rows of submatrix B. Then, the results of all those products are added into the same matrix.
+This will consist of element-wise products between columns of A and broadcasted vectors of single elements from the corresponding rows of submatrix B. See the diagram below sourced from the original guide. Then, the results of all those products are added into the same matrix.
+
+![image](https://github.com/user-attachments/assets/3b4e7d9a-9eeb-40f3-8780-86515fe250bc)
 
 Getting the operands into YMM registers is done by loading the column of $$\overline{A}$$ into a register using `_mm256_loadu_ps`, and broadcasting an element of a row of $$\overline{B}$$ into a register (where every element in the register is that same number) using `_mm256_broadcast_ss`. The kernel matrix $$\overline{C}$$ is also pre-loaded into 12 YMM registers - and it will accumulate outer product results.
 
-Once loaded, the two vector registers will be element-wise multiplied, with the result added to <u>a column</u> of the matrix $$\overline{C}$$ in a single instruction of the `_mm256_fmadd_ps` function.
+Once loaded, the two vector registers will be element-wise multiplied, with the result added to *a column* of the matrix $$\overline{C}$$ in a single instruction of the `_mm256_fmadd_ps` function.
 
 The above is repeated for all $$n_R$$ elements in the row vector of $$\overline{B}$$, to yield the completed outer product between a column of $$\overline{A}$$ and a row of $$\overline{B}$$ - which is a matrix.
 
@@ -77,9 +79,11 @@ This procedure can be summarized in: load $$\overline{C}$$ matrix, load a column
 
 The interpretation of matrix products using outer products enables the use of SIMD extensions, since it will allow us to go: vectors $$\rightarrow$$ operations $$\rightarrow$$ another vector, rather than reducing it to just a scalar - and repeating unnecessarily.
 
-Since there are only 8 floats in a single YMM register - which is the SIMD width, we have kept the kernel matrix C to be a 16x16 matrix, so $$m_R = 16$$ (a constant multiple of 8) and $$n_R = 6$$ (by choice).
+Since there are only 8 floats in a single YMM register - which is the SIMD width, we have kept the kernel matrix C to be a 16x6 matrix, so $$m_R = 16$$ (a constant multiple of 8) and $$n_R = 6$$ (by choice).
 
 To then cover the entirety of the matrix C, we iterate over its rows and columns by strides (aka hops) of the size of the kernel, which are of course $$m_R$$ and $$n_R$$.
+
+TODO: A diagram to show kernels in the original matrix
 
 **But what if the matrix dimensions are not a multiple of the kernel dimensions?**
 
@@ -91,7 +95,9 @@ For overshoots, i.e. the bit mask has not been shifted to a multiple of 16, then
 
 In other words, values of $$\overline{C}$$ are masked so that the lower `m` indices of the register contain the elements from the kernel, while the upper overshoot space is zeroed out.
 
-Order of packing overall will go like:
+TODO: A diagram to show the above!
+
+The order of packing overall will go like:
 
 ```
 for (int i = 0; i < M; i += MR) {
@@ -105,11 +111,19 @@ for (int i = 0; i < M; i += MR) {
 }
 ```
 
-## Cache Blocking
+## Caching Optimization
 
-The code was shown above to demonstrate that it is <u>not</u> a good use of cache space. In the second loop, new batches of B are being loaded multiple times, some of which overlap bewteen access strides, and with some parts not used in the packing functions.
+The code was shown above to demonstrate that it is *not* a good use of cache space. Why? See below.
 
-For large matrices, at some point the previously loaded A block will be kicked out in the inner loop, which introduces a cache miss later on, and latency to fetch it back from RAM. 
+In the nested loops, large chunks of the matrices A and B are accessed, which brings them into the cache space. 
+
+However, assuming a common LRU-type cache replacement policy, loading a very large block of B could evict the A submatrix if both matrices' sizes were substantial. This would likely happen pretty frequently since cache space is not very big compared to RAM. 
+
+The eviction of a block $$\overline{A}$$ would mean later accesses would have to fetch the data from RAM after a miss and bring it into the cache again, introducing latency to the procedure.
+
+To address this shortcoming, we structure the algorithm such that the data needed most frequently fits into the higher levels of the cache (such as L1 or L2), which are much faster than main memory.
+
+This is done by dividing the matrix into progressively smaller blocks that will fit into the CPU cache, with smaller chunks loaded at levels closer to the processor chip. By keeping blocks in the cache as much as possible, we can reduce main memory accesses, but most importantly, maximize **reuse** of data for rank-1 updates, a.k.a. outer products.
 
 ## Multithreading
 
