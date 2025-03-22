@@ -125,9 +125,21 @@ However, assuming a common LRU-type cache replacement policy, loading a very lar
 
 The eviction of a block $$\overline{A}$$ would mean later accesses would have to fetch the data from RAM after a miss and bring it into the cache again, introducing latency to the procedure.
 
-To address this shortcoming, we structure the algorithm such that the data needed most frequently fits into the higher levels of the cache (such as L1 or L2), which are much faster than main memory.
+To address this shortcoming, we adjust the looping pattern of the algorithm to break down the data into smaller chunks to fit in the cache, which are much faster than main memory. This technique ultimately improves both temporal and spatial locality, and is known as **cache blocking**. 
 
-This is done by dividing the matrix into progressively smaller blocks that will fit into the CPU cache, with smaller chunks loaded at levels closer to the processor chip. By keeping blocks in the cache as much as possible, we can reduce main memory accesses, but most importantly, maximize **reuse** of data for rank-1 updates, a.k.a. outer products.
+This is done by dividing the matrix into smaller blocks that fit into different levels of the CPU cache (L1, L2, etc.), by using more layers of loops. By keeping these blocks in cache rather than accessing DRAM, we minimize cache misses and reduce memory bandwidth bottlenecks, but most importantly, maximize **reuse** of data for rank-1 updates, a.k.a. outer products.
+
+At the highest level, we divide our resulting m x n matrix $$C$$ into blocks $$C_j$$ of size $$M x n_c$$ and B into blocks $$B_j$$  of size $$K x n_c$$. C means cache, and $$n_c$$ is a number by choice. That's the biggest repeated of a matrix that is handled.
+
+Then, in the second layer (i.e. second outermost loop) we iterate over K, dividing matrix $$A$$ into portion indexed $$A_p$$ of size $$M x k_c$$. Since B also has a dimension on K, this divides it into submatrices $$B_p$$ of size $$k_c x n_c$$ - both dimensions of which are constant. So if the matrix size isn't proportional to that, then we have to pad it with zeros. Note subscript p stands for "packed."
+
+In the third layer we iterate over M, dividing $$C_j$$ into $$C_i$$ of size $$m_c x n_c$$ and $$A_p$$ into $$A_j$$ of size $$m_c x k_c$$ - also a constant dimension which need to be filled by extra zeros.
+
+We structure our approach such that the same $$B_p$$ block is reused across multiple $$A_j$$ blocks from a single $$A_p$$ block. So it is more optimal for memory access (and given the cache access paterns) that the bigger $$B_p$$ stays in higher level L3 cache, while $$A_j$$ stays in a smaller, chip-level L2 cache.
+
+In the 4th (highest) layer (or 2nd lowest loop), we iterate over the preset $$m_c$$ dimension, breaking up $$A_j$$ into sections that are $$m_R x k_c$$. Intuitively, this is our kernel-size matrix of 'multiple columns of A' lined up horizontally - recall from the 'kernel optimization' section. :smile:
+
+In the 5th layer (i.e. innermost loop), we iterate over the $$n_c$$ dimension, obtaining our atomic blocks of size $$k_c x n_R$$. This can also be thought of as "rows of a B submatrix" stacked up vertically.
 
 ## Multithreading
 
@@ -138,6 +150,8 @@ This is done by dividing the matrix into progressively smaller blocks that will 
 [OpenMP Guide](https://www.openmp.org/wp-content/uploads/omp-hands-on-SC08.pdf)
 
 [Intel SIMD Intrinsincs Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
+
+[Cache Blocking](https://www.intel.com/content/www/us/en/developer/articles/technical/cache-blocking-techniques.html).
 
 [Intel Cacheability Intrinsics](https://www.intel.com/content/www/us/en/docs/cpp-compiler/developer-guide-reference/2021-8/cacheability-support-intrinsics-002.html)
 
