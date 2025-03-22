@@ -1,21 +1,31 @@
 import matplotlib.pyplot as plt
-import csv
-# opted to pythonize since it's just a text file!
-x = []
-y = []
 
-# Read the data from the file
-with open('benchmark_matmul.txt', 'r') as file:
-    reader = csv.reader(file)
-    for row in reader:
-        x.append(float(row[0]))  # Assuming first column is x-axis
-        y.append(float(row[2]))  # Assuming third column is y-axis
+# Function to read the data from a file
+def read_data(file_name):
+    x = []
+    y = []
+    with open(file_name, 'r') as f:
+        for line in f:
+            values = line.split()
+            x.append(int(values[0]))  # x values (first column)
+            y.append(int(values[1]))  # y values (second column)
+    return x, y
 
-# Plotting the data
-plt.plot(x, y, label='matmul.c', linewidth=2)
-plt.title('Median GFLOPS')
-plt.xlabel('m=n=k')
-plt.ylabel('GFLOPS')
+# Read data from both files
+x1, y1 = read_data('benchmark_matmul.txt')
+x2, y2 = read_data('benchmark_tut.txt')
+
+# Create the plot
+plt.figure(figsize=(10, 6))
+plt.plot(x1, y1, label='File Tutorial (Second Column)', color='blue', linestyle='-', marker='o')
+plt.plot(x2, y2, label='File Current (Second Column)', color='red', linestyle='-', marker='x')
+
+# Adding titles and labels
+plt.title('Comparison of Second Columns from Files A and B')
+plt.xlabel('X Axis')
+plt.ylabel('Second Column Values')
 plt.legend()
+
+# Show the plot
 plt.grid(True)
 plt.show()
