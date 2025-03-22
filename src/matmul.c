@@ -14,8 +14,8 @@ inline int min(int x, int y) {
 
 // Constants to divide the matrix into blocks
 // This helps to divide & conquer, which is proven to be faster
-#define MC (16 * NTHREADS * 5)  // Size of block in the j-dimension (columns of B)
-#define NC (6 * NTHREADS * 50) // Size of block in the p-dimension (rows of A and columns of B)
+#define MC (16 * NTHREADS * 5)  // Size of block in the j-dimension (columns of B) = 1280
+#define NC (6 * NTHREADS * 50) // Size of block in the p-dimension (rows of A and columns of B) = 4800
 #define KC 500 // Size of block in the i-dimension (rows of A)
 
 static float blockA_packed[MC * KC] __attribute__((aligned(64))); // buffer for matrix A with memory alignment set for SIMD compatiblity
@@ -66,24 +66,24 @@ void matmul(float* A, float* B, float* C, int m, int n, int k) {
         for (int p = 0; p < k; p += KC) {
             int kc = min(KC, k - p);
             
-            pack_blockB(&B[j * k + p], blockB_packed, nc, kc, k); // cache optimization B
+            // cache optimization for packing B
+            pack_blockB(&B[j * k + p], blockB_packed, nc, kc, k); 
 
-            for (int i = 0; i < m; i += MC) { // 3rd loop from inside - B_p already inside L3 Cache
+            // 3rd loop from inside - B_p already inside L3 Cache
+            for (int i = 0; i < m; i += MC) {
                 int mc = min(MC, m - i);
                 
-                pack_blockA(&A[p * m + i], blockA_packed, mc, kc, m); // cache optimization A
+                // cache optimization for packing A into L2
+                pack_blockA(&A[p * m + i], blockA_packed, mc, kc, m);
 #pragma omp parallel for collapse(2) num_threads(NTHREADS) // parallelize using OpenMP
 
                 for (int ir = 0; ir < mc; ir += 16) { // 2nd Loop from inside - A inside L2 Cache
                     for (int jr = 0; jr < nc; jr += 6) { // Innermost loop over microkernel, i.e. row of A and column of B
-                        
-                        // Prefetch the A and B blocks ahead of time for the current stride
-                        if (ir + 16 < mc) {
-                            _mm_prefetch(&blockA_packed[(ir + 16) * kc], _MM_HINT_T0);
-                        }
-                        if (jr + 6 < nc) {
-                            _mm_prefetch(&blockB_packed[(jr + 6) * kc], _MM_HINT_T0);
-                        }
+                
+                        // Prefetch A and B blocks ahead of the computation to reduce latency
+                        _mm_prefetch(&blockA_packed[ir * kc], _MM_HINT_T0);  // Prefetch Block A to L1 cache
+                        _mm_prefetch(&blockB_packed[jr * kc], _MM_HINT_T0);  // Prefetch Block B to L1 cache
+                        _mm_prefetch(&C[(j + jr) * m + (i + ir)], _MM_HINT_T0);  // Prefetch result C to L1 cache
 
                         int nr = min(6, nc - jr);
                         int mr = min(16, mc - ir);
@@ -95,6 +95,14 @@ void matmul(float* A, float* B, float* C, int m, int n, int k) {
                                     kc,
                                     m);
                     }
+                }
+                
+                // Add additional prefetching to ensure that we keep caches warm
+                for (int ir = 0; ir < mc; ir++) {
+                    _mm_prefetch(&blockA_packed[ir * kc], _MM_HINT_T1);  // Keep A in L2 cache
+                }
+                for (int jr = 0; jr < nc; jr++) {
+                    _mm_prefetch(&blockB_packed[jr * kc], _MM_HINT_T1);  // Keep B in L2 cache
                 }
             }
         }

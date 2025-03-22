@@ -129,19 +129,36 @@ To address this shortcoming, we adjust the looping pattern of the algorithm to b
 
 This is done by dividing the matrix into smaller blocks that fit into different levels of the CPU cache (L1, L2, etc.), by using more layers of loops. By keeping these blocks in cache rather than accessing DRAM, we minimize cache misses and reduce memory bandwidth bottlenecks, but most importantly, maximize **reuse** of data for rank-1 updates, a.k.a. outer products.
 
-At the highest level, we divide our resulting m x n matrix $$C$$ into blocks $$C_j$$ of size $$M x n_c$$ and B into blocks $$B_j$$  of size $$K x n_c$$. C means cache, and $$n_c$$ is a number by choice. That's the biggest repeated of a matrix that is handled.
+At the highest level, we divide our resulting m x n matrix $$C$$ into blocks $$C_j$$ of size $$M \times n_c$$ and B into blocks $$B_j$$  of size $$K \times n_c$$. C means cache, and $$n_c$$ is a number by choice. That's the biggest repeated of a matrix that is handled.
 
-Then, in the second layer (i.e. second outermost loop) we iterate over K, dividing matrix $$A$$ into portion indexed $$A_p$$ of size $$M x k_c$$. Since B also has a dimension on K, this divides it into submatrices $$B_p$$ of size $$k_c x n_c$$ - both dimensions of which are constant. So if the matrix size isn't proportional to that, then we have to pad it with zeros. Note subscript p stands for "packed."
+Then, in the second layer (i.e. second outermost loop) we iterate over K, dividing matrix $$A$$ into portion indexed $$A_p$$ of size $$M \times k_c$$. Since B also has a dimension on K, this divides it into submatrices $$B_p$$ of size $$k_c \times n_c$$ - both dimensions of which are constant. So if the matrix size isn't proportional to that, then we have to pad it with zeros. Note subscript p stands for "packed."
 
-In the third layer we iterate over M, dividing $$C_j$$ into $$C_i$$ of size $$m_c x n_c$$ and $$A_p$$ into $$A_j$$ of size $$m_c x k_c$$ - also a constant dimension which need to be filled by extra zeros.
+In the third layer we iterate over M, dividing $$C_j$$ into $$C_i$$ of size $$m_c \times n_c$$ and $$A_p$$ into $$A_j$$ of size $$m_c \times k_c$$ - also a constant dimension which need to be filled by extra zeros.
 
 We structure our approach such that the same $$B_p$$ block is reused across multiple $$A_j$$ blocks from a single $$A_p$$ block. So it is more optimal for memory access (and given the cache access paterns) that the bigger $$B_p$$ stays in higher level L3 cache, while $$A_j$$ stays in a smaller, chip-level L2 cache.
 
-In the 4th (highest) layer (or 2nd lowest loop), we iterate over the preset $$m_c$$ dimension, breaking up $$A_j$$ into sections that are $$m_R x k_c$$. Intuitively, this is our kernel-size matrix of 'multiple columns of A' lined up horizontally - recall from the 'kernel optimization' section. :smile:
+In the 4th (highest) layer (or 2nd lowest loop), we iterate over the preset $$m_c$$ dimension, breaking up $$A_j$$ into sections that are $$m_R \times k_c$$. Intuitively, this is our kernel-size matrix of 'multiple columns of A' lined up horizontally - recall from the 'kernel optimization' section. :smile:
 
-In the 5th layer (i.e. innermost loop), we iterate over the $$n_c$$ dimension, obtaining our atomic blocks of size $$k_c x n_R$$. This can also be thought of as "rows of a B submatrix" stacked up vertically.
+In the 5th layer (i.e. innermost loop), we iterate over the $$n_c$$ dimension, obtaining our atomic blocks of size $$k_c \times n_R$$. This can also be thought of as "rows of a B submatrix" stacked up vertically.
+
+Finally, we take the most atomic $$ m_R \times n_R $$ kernel unit extracted by the five layers of loops, and pass it to the computation kernel.
 
 ## Multithreading
+
+For our penultimate optimization technique, we can see many operations listed above are composed of for loops containing independent operations.
+
+To accelerate this, we distribute the iterations of the loops among multiple threads, using the OpenMP library.
+
+This enables us to distribute the operations among multiple cores, rather than a single core doing all the work. 
+
+We primarily did this with for loops like the code below:
+
+```
+#pragma omp parallel for num_threads(NTHREADS)
+    for (int j = 0; j < nc; j += NR)
+```
+
+Another useful keyword used is `collapse(N)` which is generally placed after the `for` word. this can merge `N` nested loop into a *single* loop, allowing us to keep threads busy so we are not wasting cores. 
 
 ## Memory Prefetching
 

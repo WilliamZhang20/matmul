@@ -17,13 +17,13 @@ x2, y2 = read_data('benchmark_tut.txt')
 
 # Create the plot
 plt.figure(figsize=(10, 6))
-plt.plot(x1, y1, label='File Tutorial (Second Column)', color='blue', linestyle='-', marker='o')
-plt.plot(x2, y2, label='File Current (Second Column)', color='red', linestyle='-', marker='x')
+plt.plot(x1, y1, label='Current Implementation', color='blue', linestyle='-', marker='o')
+plt.plot(x2, y2, label='Tutorial Implementation', color='red', linestyle='-', marker='x')
 
 # Adding titles and labels
-plt.title('Comparison of Second Columns from Files A and B')
-plt.xlabel('X Axis')
-plt.ylabel('Second Column Values')
+plt.title('Comparison of Matrix Multiplication')
+plt.xlabel('Matrix dimensions (m = n = k)')
+plt.ylabel('Peak FLOPS')
 plt.legend()
 
 # Show the plot
