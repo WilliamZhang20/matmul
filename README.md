@@ -17,10 +17,11 @@ The list of techniques used to accelerate matrix multiplication is:
 For more info, a map of contents below:
 - [Mathematical Definitions](#mathematical-definitions)
 - [Kernel Optimizations](#kernel-optimizations)
-- [Cache Blocking](#cache-blocking)
+- [Caching Optimization](#caching-optimization)
 - [Multithreading](#multithreading)
 - [Memory Prefetching](#memory-prefetching)
 - [Sources](#sources)
+- [Results](#results)
 
 Key compiler flags used: 
 `-O3 -march=native -mno-avx512f -fopenmp`
@@ -134,3 +135,9 @@ This is done by dividing the matrix into progressively smaller blocks that will 
 [OpenMP Guide](https://www.openmp.org/wp-content/uploads/omp-hands-on-SC08.pdf)
 
 [Intel SIMD Intrinsincs Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
+
+## Results
+
+A benchmark comparing my additions of optimizations after multithreading to the original guide. The graph shows *peak* FLOPS.
+
+![benchmark](https://github.com/user-attachments/assets/c2acd005-4879-4cb9-b2cc-01bc8e373101)
