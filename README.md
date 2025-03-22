@@ -4,6 +4,8 @@ Fast matrix multiplication on a CPU between two matrices.
 
 Primarily followed [this](https://salykova.github.io/matmul-cpu) guide by [Aman Salykov](https://github.com/salykova), with the addition of memory prefetching to speed up data access.
 
+Also changed testing scripts from Bash to Python (since I'm on Windows), and benchmarked the tutorial rather than OpenBLAS.
+
 ## Overview
 
 The list of techniques used to accelerate matrix multiplication is:
@@ -21,6 +23,7 @@ For more info, a map of contents below:
 - [Multithreading](#multithreading)
 - [Memory Prefetching](#memory-prefetching)
 - [Sources](#sources)
+- [Usage](#usage)
 - [Results](#results)
 
 Key compiler flags used: 
@@ -135,6 +138,17 @@ This is done by dividing the matrix into progressively smaller blocks that will 
 [OpenMP Guide](https://www.openmp.org/wp-content/uploads/omp-hands-on-SC08.pdf)
 
 [Intel SIMD Intrinsincs Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
+
+[Intel Cacheability Intrinsics](https://www.intel.com/content/www/us/en/docs/cpp-compiler/developer-guide-reference/2021-8/cacheability-support-intrinsics-002.html)
+
+## Usage
+
+To get started using the programs inside:
+- First and foremost, keep other processes to the minimum. Matrix multiplication is expensive, especially on Windows.
+- For testing the tutorial implementation speeds, run from the repository directory, `python scripts/benchmark_tutorial.py`. It will set `#define TEST_TUT` to be true in the CMake build file option.
+- For testing my implementation speed, run from repo, `python scripts/benchmark_curr.py`.
+- When finished the two steps above, one can plot & compare the FLOPS performance of both by running `plot_benchmark.py`.
+- To run matrix multiplication yourself & test out everything, build CMake yourself and run the `test_matmul` executable in the build directory.
 
 ## Results
 
