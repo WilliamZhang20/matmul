@@ -162,6 +162,8 @@ Another useful keyword used is `collapse(N)` which is generally placed after the
 
 ## Memory Prefetching
 
+A technique to reduce memory latency for loading by fetching it before it is used, knowing that it will be used.
+
 ## Sources
 
 [OpenMP Guide](https://www.openmp.org/wp-content/uploads/omp-hands-on-SC08.pdf)
@@ -185,4 +187,4 @@ To get started using the programs inside:
 
 A benchmark comparing my additions of optimizations after multithreading to the original guide. The graph shows *peak* FLOPS.
 
-![benchmark](https://github.com/user-attachments/assets/c2acd005-4879-4cb9-b2cc-01bc8e373101)
+![benchmark](https://github.com/user-attachments/assets/754d60eb-e4b5-4f48-aad8-88483ec77ca4)
