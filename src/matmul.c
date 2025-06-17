@@ -21,6 +21,8 @@ inline int min(int x, int y) {
 static float blockA_packed[MC * KC] __attribute__((aligned(64))); // buffer for matrix A with memory alignment set for SIMD compatiblity
 static float blockB_packed[NC * KC] __attribute__((aligned(64))); // buffer for matrix B with memory alignment set for SIMD compatiblity
 
+extern void kernel_16x6(float* restrict A, float* restrict B, float* restrict C, int mr, int nr, int kc, int m);
+
 void pack_panelB(float* B, float* blockB_packed, int nr, int kc, int k) {
     for (int p = 0; p < kc; p++) {
         for (int j = 0; j < nr; j++) {

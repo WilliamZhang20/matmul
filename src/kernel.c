@@ -1,8 +1,8 @@
 #include "kernel.h"
 
-void kernel_16x6(float* blockA_packed,
-                 float* blockB_packed,
-                 float* C,
+void kernel_16x6(float* restrict blockA_packed,
+                 float* restrict blockB_packed,
+                 float* restrict C,
                  int mr,
                  int nr,
                  int kc,
