@@ -1,6 +1,5 @@
 #include "kernel.h"
 
-
 void kernel_16x6(float* blockA_packed,
                  float* blockB_packed,
                  float* C,
@@ -281,8 +280,8 @@ void kernel_16x6(float* blockA_packed,
                 blockA_packed += 16;
                 blockB_packed += 6;
             }
-            _mm256_storeu_ps(C, C00);
-            _mm256_storeu_ps(&C[8], C10);
+            _mm256_stream_ps(C, C00);
+            _mm256_stream_ps(&C[8], C10);
             break;
         case 2 :
             C00 = _mm256_loadu_ps(C);
@@ -305,10 +304,10 @@ void kernel_16x6(float* blockA_packed,
                 blockA_packed += 16;
                 blockB_packed += 6;
             }
-            _mm256_storeu_ps(C, C00);
-            _mm256_storeu_ps(&C[8], C10);
-            _mm256_storeu_ps(&C[m], C01);
-            _mm256_storeu_ps(&C[m + 8], C11);
+            _mm256_stream_ps(C, C00);
+            _mm256_stream_ps(&C[8], C10);
+            _mm256_stream_ps(&C[m], C01);
+            _mm256_stream_ps(&C[m + 8], C11);
             break;
         case 3 :
             C00 = _mm256_loadu_ps(C);
@@ -337,12 +336,12 @@ void kernel_16x6(float* blockA_packed,
                 blockA_packed += 16;
                 blockB_packed += 6;
             }
-            _mm256_storeu_ps(C, C00);
-            _mm256_storeu_ps(&C[8], C10);
-            _mm256_storeu_ps(&C[m], C01);
-            _mm256_storeu_ps(&C[m + 8], C11);
-            _mm256_storeu_ps(&C[2 * m], C02);
-            _mm256_storeu_ps(&C[2 * m + 8], C12);
+            _mm256_stream_ps(C, C00);
+            _mm256_stream_ps(&C[8], C10);
+            _mm256_stream_ps(&C[m], C01);
+            _mm256_stream_ps(&C[m + 8], C11);
+            _mm256_stream_ps(&C[2 * m], C02);
+            _mm256_stream_ps(&C[2 * m + 8], C12);
             break;
         case 4 :
             C00 = _mm256_loadu_ps(C);
@@ -377,14 +376,14 @@ void kernel_16x6(float* blockA_packed,
                 blockA_packed += 16;
                 blockB_packed += 6;
             }
-            _mm256_storeu_ps(C, C00);
-            _mm256_storeu_ps(&C[8], C10);
-            _mm256_storeu_ps(&C[m], C01);
-            _mm256_storeu_ps(&C[m + 8], C11);
-            _mm256_storeu_ps(&C[2 * m], C02);
-            _mm256_storeu_ps(&C[2 * m + 8], C12);
-            _mm256_storeu_ps(&C[3 * m], C03);
-            _mm256_storeu_ps(&C[3 * m + 8], C13);
+            _mm256_stream_ps(C, C00);
+            _mm256_stream_ps(&C[8], C10);
+            _mm256_stream_ps(&C[m], C01);
+            _mm256_stream_ps(&C[m + 8], C11);
+            _mm256_stream_ps(&C[2 * m], C02);
+            _mm256_stream_ps(&C[2 * m + 8], C12);
+            _mm256_stream_ps(&C[3 * m], C03);
+            _mm256_stream_ps(&C[3 * m + 8], C13);
             break;
         case 5 :
             C00 = _mm256_loadu_ps(C);
@@ -425,16 +424,16 @@ void kernel_16x6(float* blockA_packed,
                 blockA_packed += 16;
                 blockB_packed += 6;
             }
-            _mm256_storeu_ps(C, C00);
-            _mm256_storeu_ps(&C[8], C10);
-            _mm256_storeu_ps(&C[m], C01);
-            _mm256_storeu_ps(&C[m + 8], C11);
-            _mm256_storeu_ps(&C[2 * m], C02);
-            _mm256_storeu_ps(&C[2 * m + 8], C12);
-            _mm256_storeu_ps(&C[3 * m], C03);
-            _mm256_storeu_ps(&C[3 * m + 8], C13);
-            _mm256_storeu_ps(&C[4 * m], C04);
-            _mm256_storeu_ps(&C[4 * m + 8], C14);
+            _mm256_stream_ps(C, C00);
+            _mm256_stream_ps(&C[8], C10);
+            _mm256_stream_ps(&C[m], C01);
+            _mm256_stream_ps(&C[m + 8], C11);
+            _mm256_stream_ps(&C[2 * m], C02);
+            _mm256_stream_ps(&C[2 * m + 8], C12);
+            _mm256_stream_ps(&C[3 * m], C03);
+            _mm256_stream_ps(&C[3 * m + 8], C13);
+            _mm256_stream_ps(&C[4 * m], C04);
+            _mm256_stream_ps(&C[4 * m + 8], C14);
             break;
         default :
             C00 = _mm256_loadu_ps(C);
@@ -482,19 +481,19 @@ void kernel_16x6(float* blockA_packed,
                 blockA_packed += 16;
                 blockB_packed += 6;
             }
-            // Move buffer results back into C
-            _mm256_storeu_ps(C, C00);
-            _mm256_storeu_ps(&C[8], C10);
-            _mm256_storeu_ps(&C[m], C01);
-            _mm256_storeu_ps(&C[m + 8], C11);
-            _mm256_storeu_ps(&C[2 * m], C02);
-            _mm256_storeu_ps(&C[2 * m + 8], C12);
-            _mm256_storeu_ps(&C[3 * m], C03);
-            _mm256_storeu_ps(&C[3 * m + 8], C13);
-            _mm256_storeu_ps(&C[4 * m], C04);
-            _mm256_storeu_ps(&C[4 * m + 8], C14);
-            _mm256_storeu_ps(&C[5 * m], C05);
-            _mm256_storeu_ps(&C[5 * m + 8], C15);
+            // Move buffer results back into C in non-temporal stores
+            _mm256_stream_ps(C, C00);
+            _mm256_stream_ps(&C[8], C10);
+            _mm256_stream_ps(&C[m], C01);
+            _mm256_stream_ps(&C[m + 8], C11);
+            _mm256_stream_ps(&C[2 * m], C02);
+            _mm256_stream_ps(&C[2 * m + 8], C12);
+            _mm256_stream_ps(&C[3 * m], C03);
+            _mm256_stream_ps(&C[3 * m + 8], C13);
+            _mm256_stream_ps(&C[4 * m], C04);
+            _mm256_stream_ps(&C[4 * m + 8], C14);
+            _mm256_stream_ps(&C[5 * m], C05);
+            _mm256_stream_ps(&C[5 * m + 8], C15);
             break;
         }
     }
