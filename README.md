@@ -164,13 +164,25 @@ Another useful keyword used is `collapse(N)` which is generally placed after the
 
 A technique to reduce memory latency for loading by fetching it before it is used, knowing that it will be used.
 
+Before kernel execution, I called the `_mm_prefetch` intrinsic instruction from the AVX instruction set.
+
+For context of the three matrices, inputs A and B, and output C, all pass through the cache.
+
+That intrinsic has a second argument indicating the priority of the value in memory, which ultimately plays a factor in whether it will go to L1, L2, or L3 cache, and for how long. 
+
+So the flag ` _MM_HINT_T0` was used for the sections of inputs A and B to keep it as close to the processor as possible.
+
+However, the difference for C is that it is only written to, never read from. There is no reason to keep sections of C for long.
+
+So I used the `_MM_HINT_NTA` flag to indicate *non-temporal access*, suggesting to the processor to dispose of that location in cache soon after being written to. This avoids pollution, and keeps more elements of A and B in cache.
+
 ## Sources
 
 [OpenMP Guide](https://www.openmp.org/wp-content/uploads/omp-hands-on-SC08.pdf)
 
 [Intel SIMD Intrinsincs Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html)
 
-[Cache Blocking](https://www.intel.com/content/www/us/en/developer/articles/technical/cache-blocking-techniques.html).
+[Cache Blocking](https://www.intel.com/content/www/us/en/developer/articles/technical/cache-blocking-techniques.html)
 
 [Intel Cacheability Intrinsics](https://www.intel.com/content/www/us/en/docs/cpp-compiler/developer-guide-reference/2021-8/cacheability-support-intrinsics-002.html)
 
@@ -187,4 +199,6 @@ To get started using the programs inside:
 
 A benchmark comparing my additions of optimizations after multithreading to the original guide. The graph shows *peak* FLOPS.
 
-![benchmark](https://github.com/user-attachments/assets/754d60eb-e4b5-4f48-aad8-88483ec77ca4)
+Prefetching clearly made an improvement to performance. Although that is quite debatable from the graph, I use Windows, an OS with many background processes. Next time, Linux + pthreads!
+
+![benchmark](https://github.com/user-attachments/assets/675d8681-d2fe-4477-b643-7976bf08b852)
