@@ -114,7 +114,7 @@ void matmul_old(float* A, float* B, float* C, int m, int n, int k) {
             for (int i = 0; i < m; i += MC) { // 3rd loop from inside - B_p already inside L3 Cache
                 int mc = min(MC, m - i); 
                 pack_blockA(&A[p * m + i], blockA_packed, mc, kc, m); // cache optimization A
-#pragma omp parallel for collapse(2) num_threads(NTHREADS) // parallelize using OpenMP
+#pragma omp parallel for collapse(2) num_threads(NTHREADS) schedule(dynamic) // parallelize using OpenMP
                 for (int ir = 0; ir < mc; ir += 16) { // 2nd Loop from inside - A inside L2 Cache
                     for (int jr = 0; jr < nc; jr += 6) { // Innermost loop over microkernel, i.e. row of A and column of B
                         int nr = min(6, nc - jr);
