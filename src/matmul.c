@@ -9,7 +9,7 @@ inline int min(int x, int y) {
 }
 
 #ifndef NTHREADS
-    #define NTHREADS 16
+    #define NTHREADS 24
 #endif
 
 // Constants to divide the matrix into blocks
@@ -21,7 +21,7 @@ inline int min(int x, int y) {
 static float blockA_packed[MC * KC] __attribute__((aligned(64))); // buffer for matrix A with memory alignment set for SIMD compatiblity
 static float blockB_packed[NC * KC] __attribute__((aligned(64))); // buffer for matrix B with memory alignment set for SIMD compatiblity
 
-extern void kernel_16x6(float* restrict A, float* restrict B, float* restrict C, int mr, int nr, int kc, int m);
+extern void kernel_16x6_load_accum(float* restrict A, float* restrict B, float* restrict C, int mr, int nr, int kc, int m);
 
 void pack_panelB(float* B, float* blockB_packed, int nr, int kc, int k) {
     for (int p = 0; p < kc; p++) {
@@ -81,16 +81,14 @@ void matmul(float* A, float* B, float* C, int m, int n, int k) {
 #pragma omp parallel for collapse(2) num_threads(NTHREADS) // parallelize using OpenMP
 
                 for (int ir = 0; ir < mc; ir += 16) { // 2nd Loop from inside - A inside L2 Cache
+
                     for (int jr = 0; jr < nc; jr += 6) { // Innermost loop over microkernel, i.e. row of A and column of B
                 
-                        // Prefetch A and B blocks ahead of the computation to reduce latency
-                        _mm_prefetch(&blockA_packed[ir * kc], _MM_HINT_T0);  // Prefetch Block A to L1 cache
                         _mm_prefetch(&blockB_packed[jr * kc], _MM_HINT_T0);  // Prefetch Block B to L1 cache
-                        _mm_prefetch(&C[(j + jr) * m + (i + ir)], _MM_HINT_NTA);  // Prefetch result C to L1 cache
 
                         int nr = min(6, nc - jr);
                         int mr = min(16, mc - ir);
-                        kernel_16x6(&blockA_packed[ir * kc],
+                        kernel_16x6_load_accum(&blockA_packed[ir * kc],
                                     &blockB_packed[jr * kc],
                                     &C[(j + jr) * m + (i + ir)],
                                     mr,
@@ -114,18 +112,18 @@ void matmul_old(float* A, float* B, float* C, int m, int n, int k) {
             for (int i = 0; i < m; i += MC) { // 3rd loop from inside - B_p already inside L3 Cache
                 int mc = min(MC, m - i); 
                 pack_blockA(&A[p * m + i], blockA_packed, mc, kc, m); // cache optimization A
-#pragma omp parallel for collapse(2) num_threads(NTHREADS) schedule(dynamic) // parallelize using OpenMP
+#pragma omp parallel for collapse(2) num_threads(NTHREADS) // parallelize using OpenMP
                 for (int ir = 0; ir < mc; ir += 16) { // 2nd Loop from inside - A inside L2 Cache
                     for (int jr = 0; jr < nc; jr += 6) { // Innermost loop over microkernel, i.e. row of A and column of B
                         int nr = min(6, nc - jr);
                         int mr = min(16, mc - ir);
-                        kernel_16x6(&blockA_packed[ir * kc],
-                                    &blockB_packed[jr * kc],
-                                    &C[(j + jr) * m + (i + ir)],
-                                    mr,
-                                    nr,
-                                    kc,
-                                    m);
+                        kernel_16x6_load_accum(&blockA_packed[ir * kc],
+                                                &blockB_packed[jr * kc],
+                                                &C[(j + jr) * m + (i + ir)],
+                                                mr,
+                                                nr,
+                                                kc,
+                                                m);
                     }
                 }
             }
